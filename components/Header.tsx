@@ -12,8 +12,8 @@ export default function Header() {
         {/* Logo */}
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0 }}>
           <span style={{ fontSize: 22 }}>🇺🇦</span>
-          <span style={{ fontWeight: 900, fontSize: 18, color: '#111827' }}>UkrExport</span>
-          <span style={{ fontSize: 11, fontWeight: 600, color: '#2563eb', background: '#eff6ff', padding: '2px 6px', borderRadius: 4 }}>B2B</span>
+          <span style={{ fontWeight: 900, fontSize: 18, color: '#111827' }}>Corevia</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#2563eb', background: '#eff6ff', padding: '2px 6px', borderRadius: 4 }}>Flow</span>
         </Link>
 
         {/* Nav */}
