@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { prisma } from '@/lib/db';
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // 50 target languages for translation
 const LANGUAGES = [
@@ -50,10 +50,11 @@ async function scrapeWithJina(url: string): Promise<string> {
   return res.text();
 }
 
-async function extractWithClaude(rawContent: string, url: string) {
-  const msg = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+async function extractWithGPT(rawContent: string, url: string) {
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
     max_tokens: 2000,
+    response_format: { type: 'json_object' },
     messages: [{
       role: 'user',
       content: `Extract structured company information from this scraped website content.
@@ -78,21 +79,22 @@ ${rawContent.slice(0, 8000)}`,
     }],
   });
 
-  const text = msg.content[0].type === 'text' ? msg.content[0].text : '';
+  const text = completion.choices[0].message.content ?? '';
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('Claude did not return valid JSON');
+  if (!jsonMatch) throw new Error('GPT did not return valid JSON');
   return JSON.parse(jsonMatch[0]);
 }
 
-async function translateWithClaude(data: { name: string; description: string }, langs: string[]): Promise<Record<string, { name: string; description: string }>> {
+async function translateWithGPT(data: { name: string; description: string }, langs: string[]): Promise<Record<string, { name: string; description: string }>> {
   const langList = langs.map(l => {
     const lang = LANGUAGES.find(x => x.code === l);
     return lang ? `"${l}": translate to ${lang.name}` : null;
   }).filter(Boolean).join('\n');
 
-  const msg = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
     max_tokens: 4000,
+    response_format: { type: 'json_object' },
     messages: [{
       role: 'user',
       content: `Translate this company profile to the following languages.
@@ -106,7 +108,7 @@ ${langList}`,
     }],
   });
 
-  const text = msg.content[0].type === 'text' ? msg.content[0].text : '{}';
+  const text = completion.choices[0].message.content ?? '{}';
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   return jsonMatch ? JSON.parse(jsonMatch[0]) : {};
 }
@@ -126,23 +128,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch website. Check the URL and try again.' }, { status: 422 });
     }
 
-    // Step 2: Extract structured data with Claude
-    let extracted: Awaited<ReturnType<typeof extractWithClaude>>;
+    // Step 2: Extract structured data with GPT-4o mini
+    let extracted: Awaited<ReturnType<typeof extractWithGPT>>;
     try {
-      extracted = await extractWithClaude(rawContent, url);
+      extracted = await extractWithGPT(rawContent, url);
     } catch {
       return NextResponse.json({ error: 'Failed to parse website content. Try a different URL.' }, { status: 422 });
     }
 
-    // Step 3: Translate to all languages with Claude
+    // Step 3: Translate to all languages with GPT-4o mini
     let translations: Record<string, { name: string; description: string }> = {};
     try {
-      translations = await translateWithClaude(
+      translations = await translateWithGPT(
         { name: extracted.companyNameEn, description: extracted.description },
-        langs.slice(0, 30), // translate in batches of 30
+        langs.slice(0, 30),
       );
       if (langs.length > 30) {
-        const batch2 = await translateWithClaude(
+        const batch2 = await translateWithGPT(
           { name: extracted.companyNameEn, description: extracted.description },
           langs.slice(30),
         );
@@ -155,7 +157,6 @@ export async function POST(req: NextRequest) {
     // Step 4: Create vendor in DB
     const slug = slugify(extracted.companyNameEn) + '-' + Date.now().toString(36);
 
-    // Create a user for this vendor
     const user = await prisma.user.create({
       data: {
         email: `${slug}@imported.corevia.flow`,
