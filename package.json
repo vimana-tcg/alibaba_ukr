@@ -1,0 +1,31 @@
+{
+  "name": "ukrexport-marketplace",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:seed": "tsx lib/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.14.0",
+    "next": "^14.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "next-auth": "^4.24.7",
+    "bcryptjs": "^2.4.3",
+    "@neondatabase/serverless": "^0.9.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "prisma": "^5.14.0",
+    "tsx": "^4.15.0",
+    "typescript": "^5.4.0"
+  }
+}

@@ -1,0 +1,201 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL")
+}
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String?
+  name          String?
+  role          String    @default("buyer") // buyer | vendor | admin
+  createdAt     DateTime  @default(now())
+
+  vendor        Vendor?
+  buyer         Buyer?
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Vendors ─────────────────────────────────────────────────────────────────
+
+model Vendor {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  companyNameEn   String
+  companyNameUa   String
+  slug            String   @unique
+  edrpou          String?  @unique
+  description     String?
+  logoUrl         String?
+  website         String?
+  email           String?
+  phone           String?
+  region          String?
+  city            String?
+  yearEstablished Int?
+  employeeCount   String?
+  category        String?  // food | metals | chemicals | textiles | machinery | wood
+  isVerified      Boolean  @default(false)
+  kycStatus       String   @default("pending") // pending | approved | rejected
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User                  @relation(fields: [userId], references: [id])
+  certifications  VendorCertification[]
+  rfqs            Rfq[]
+  products        Product[]
+}
+
+model VendorCertification {
+  id          String    @id @default(cuid())
+  vendorId    String
+  certType    String    // ISO9001 | ISO14001 | HACCP | BRC | GlobalGAP | CE | Organic
+  certNumber  String?
+  issuedAt    DateTime?
+  expiresAt   DateTime?
+  fileUrl     String?
+  vendor      Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+}
+
+model Product {
+  id              String  @id @default(cuid())
+  vendorId        String
+  nameEn          String
+  nameUa          String?
+  hsCode          String?
+  description     String?
+  unit            String  @default("MT")
+  minOrderQty     Float?
+  priceUsd        Float?
+  imageUrl        String?
+  vendor          Vendor  @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  rfqItems        RfqItem[]
+}
+
+// ─── Buyers ───────────────────────────────────────────────────────────────────
+
+model Buyer {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  companyName String
+  country     String
+  vatNumber   String?
+  kycStatus   String   @default("pending")
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+  rfqs        Rfq[]
+}
+
+// ─── RFQ ──────────────────────────────────────────────────────────────────────
+
+model Rfq {
+  id                 String      @id @default(cuid())
+  rfqNumber          String      @unique
+  buyerId            String
+  vendorId           String
+  status             String      @default("draft") // draft | submitted | responded | accepted | closed
+  destinationCountry String
+  incoterm           String      @default("EXW")
+  currency           String      @default("USD")
+  notes              String?
+  expiresAt          DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  buyer              Buyer       @relation(fields: [buyerId], references: [id])
+  vendor             Vendor      @relation(fields: [vendorId], references: [id])
+  items              RfqItem[]
+  responses          RfqResponse[]
+}
+
+model RfqItem {
+  id          String   @id @default(cuid())
+  rfqId       String
+  productId   String?
+  productName String
+  hsCode      String?
+  quantity    Float
+  unit        String   @default("MT")
+  rfq         Rfq      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  product     Product? @relation(fields: [productId], references: [id])
+}
+
+model RfqResponse {
+  id          String    @id @default(cuid())
+  rfqId       String
+  totalPrice  Float
+  currency    String    @default("USD")
+  validUntil  DateTime?
+  leadTimeDays Int?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  rfq         Rfq       @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+}
+
+// ─── Compliance / HS Codes ────────────────────────────────────────────────────
+
+model HsCode {
+  id            String  @id @default(cuid())
+  hsCode        String  @unique
+  descriptionEn String
+  descriptionUa String?
+  chapter       String
+  section       String?
+  mfnRatePct    Float   @default(0)
+  euDcftaRatePct Float  @default(0)
+  vatEuPct      Float   @default(20)
+}
+
+// ─── Exchange Rates ───────────────────────────────────────────────────────────
+
+model ExchangeRate {
+  id           String   @id @default(cuid())
+  fromCurrency String
+  toCurrency   String
+  rate         Float
+  updatedAt    DateTime @default(now())
+
+  @@unique([fromCurrency, toCurrency])
+}
