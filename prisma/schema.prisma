@@ -75,9 +75,12 @@ model Vendor {
   city            String?
   yearEstablished Int?
   employeeCount   String?
-  category        String?  // food | metals | chemicals | textiles | machinery | wood
+  category        String?
+  categorySlug    String?
   isVerified      Boolean  @default(false)
-  kycStatus       String   @default("pending") // pending | approved | rejected
+  kycStatus       String   @default("pending")
+  sourceUrl       String?                        // original website that was scraped
+  translations    Json?                          // { "de": { name, description }, "fr": {...}, ... }
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -85,6 +88,20 @@ model Vendor {
   certifications  VendorCertification[]
   rfqs            Rfq[]
   products        Product[]
+}
+
+// ─── B2B Categories ───────────────────────────────────────────────────────────
+
+model Category {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  nameEn      String
+  icon        String?
+  description String?
+  metaTitle   String?
+  metaDesc    String?
+  hsChapters  String?   // comma-separated HS chapters
+  sortOrder   Int     @default(0)
 }
 
 model VendorCertification {

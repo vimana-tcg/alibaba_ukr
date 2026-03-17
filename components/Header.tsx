@@ -21,6 +21,7 @@ export default function Header() {
           {[
             { href: '/manufacturers', label: 'Manufacturers' },
             { href: '/calculator', label: '🧮 Duty Calc' },
+            { href: '/vendor/import', label: '🤖 AI Import' },
             { href: '/dashboard', label: 'Dashboard' },
           ].map(item => (
             <Link
