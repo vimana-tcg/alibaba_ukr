@@ -1,10 +1,6 @@
-import Pusher from 'pusher';
-
-// Server-side Pusher instance (used in API routes)
-export const pusherServer = new Pusher({
-  appId: process.env.PUSHER_APP_ID!,
-  key: process.env.NEXT_PUBLIC_PUSHER_KEY!,
-  secret: process.env.PUSHER_SECRET!,
-  cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER ?? 'eu',
-  useTLS: true,
-});
+// Pusher is not used — real-time is handled via polling.
+// Stub kept so API routes compile without changes.
+export const pusherServer = {
+  trigger: async (_channel?: string, _event?: string, _data?: unknown) => {},
+  authorizeChannel: () => ({ auth: '' }),
+};

@@ -67,6 +67,37 @@ type IntegrationBlueprint = {
   isolationRules: string[];
 };
 
+type RenderedLandingSection = {
+  id: string;
+  eyebrow: string;
+  heading: string;
+  body: string;
+  items: string[];
+  component: string;
+};
+
+type RenderedLanding = {
+  hero: {
+    badge: string;
+    title: string;
+    subtitle: string;
+    primaryCta: string;
+    secondaryCta: string;
+    proofBar: string[];
+  };
+  sections: RenderedLandingSection[];
+  theme: {
+    direction: string;
+    bg: string;
+    surface: string;
+    primary: string;
+    accent: string;
+    text: string;
+    headingFont: string;
+    bodyFont: string;
+  };
+};
+
 type LandingState = {
   runId: string;
   brief: LandingBrief;
@@ -91,6 +122,8 @@ export type LandingRunResult = {
   };
   logs: LandingAgentLog[];
   exportJson: string;
+  renderedLanding: RenderedLanding;
+  exportTsx: string;
 };
 
 type AgentResult = {
@@ -252,6 +285,148 @@ function choosePalette(industry: string) {
 
 function dedupe(values: string[]) {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function toSentenceCase(value: string) {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function escapeForTemplate(value: string) {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/`/g, '\\`')
+    .replace(/\$\{/g, '\\${');
+}
+
+function renderLandingModel(
+  state: Required<Pick<LandingState, 'brand' | 'designSystem' | 'sections' | 'copy' | 'integration'>> & { runId: string },
+): RenderedLanding {
+  return {
+    hero: {
+      badge: state.copy.heroBadge,
+      title: state.copy.heroTitle,
+      subtitle: state.copy.heroSubtitle,
+      primaryCta: state.copy.primaryCta,
+      secondaryCta: state.copy.secondaryCta,
+      proofBar: state.copy.proofBar,
+    },
+    sections: state.sections.map((section) => ({
+      id: section.id,
+      eyebrow: section.component,
+      heading: section.title,
+      body: toSentenceCase(section.goal),
+      items: section.content,
+      component: section.component,
+    })),
+    theme: {
+      direction: state.designSystem.direction,
+      bg: state.designSystem.palette.bg,
+      surface: state.designSystem.palette.surface,
+      primary: state.designSystem.palette.primary,
+      accent: state.designSystem.palette.accent,
+      text: state.designSystem.palette.text,
+      headingFont: state.designSystem.typography.heading,
+      bodyFont: state.designSystem.typography.body,
+    },
+  };
+}
+
+function buildTsxExport(
+  state: Required<Pick<LandingState, 'brand' | 'designSystem' | 'sections' | 'copy' | 'integration'>> & { runId: string },
+  renderedLanding: RenderedLanding,
+) {
+  const heroProof = renderedLanding.hero.proofBar
+    .map((item) => `'${escapeForTemplate(item)}'`)
+    .join(', ');
+  const sectionsLiteral = renderedLanding.sections.map((section) => `{
+    id: '${escapeForTemplate(section.id)}',
+    eyebrow: '${escapeForTemplate(section.eyebrow)}',
+    heading: '${escapeForTemplate(section.heading)}',
+    body: '${escapeForTemplate(section.body)}',
+    component: '${escapeForTemplate(section.component)}',
+    items: [${section.items.map((item) => `'${escapeForTemplate(item)}'`).join(', ')}],
+  }`).join(',\n  ');
+
+  return `export default function GeneratedLandingPage() {
+  const theme = {
+    bg: '${escapeForTemplate(renderedLanding.theme.bg)}',
+    surface: '${escapeForTemplate(renderedLanding.theme.surface)}',
+    primary: '${escapeForTemplate(renderedLanding.theme.primary)}',
+    accent: '${escapeForTemplate(renderedLanding.theme.accent)}',
+    text: '${escapeForTemplate(renderedLanding.theme.text)}',
+  };
+
+  const heroProof = [${heroProof}];
+  const sections = [
+  ${sectionsLiteral}
+  ];
+
+  return (
+    <main style={{ background: theme.bg, color: theme.text, minHeight: '100vh', padding: '32px 0 80px' }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px' }}>
+        <section style={{
+          background: \`linear-gradient(135deg, \${theme.surface}, #ffffff)\`,
+          borderRadius: 28,
+          padding: '56px 40px',
+          boxShadow: '0 24px 60px rgba(15,23,42,.12)',
+          border: '1px solid rgba(148,163,184,.18)',
+        }}>
+          <div style={{ display: 'inline-flex', padding: '6px 12px', borderRadius: 999, background: \`\${theme.primary}18\`, color: theme.primary, fontWeight: 700, fontSize: 12, textTransform: 'uppercase' }}>
+            ${escapeForTemplate(renderedLanding.hero.badge)}
+          </div>
+          <h1 style={{ fontSize: 'clamp(36px, 6vw, 68px)', lineHeight: 1.02, margin: '18px 0 14px' }}>
+            ${escapeForTemplate(renderedLanding.hero.title)}
+          </h1>
+          <p style={{ fontSize: 18, lineHeight: 1.7, maxWidth: 760, opacity: .86 }}>
+            ${escapeForTemplate(renderedLanding.hero.subtitle)}
+          </p>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 24 }}>
+            <a href="#contact" style={{ background: theme.primary, color: '#fff', padding: '14px 22px', borderRadius: 14, fontWeight: 700 }}>
+              ${escapeForTemplate(renderedLanding.hero.primaryCta)}
+            </a>
+            <a href="#workflow" style={{ background: '#fff', color: theme.primary, padding: '14px 22px', borderRadius: 14, border: \`1px solid \${theme.primary}33\`, fontWeight: 700 }}>
+              ${escapeForTemplate(renderedLanding.hero.secondaryCta)}
+            </a>
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 22 }}>
+            {heroProof.map((item) => (
+              <span key={item} style={{ padding: '8px 12px', borderRadius: 999, border: '1px solid rgba(148,163,184,.2)', background: '#fff', fontSize: 13, fontWeight: 600 }}>
+                {item}
+              </span>
+            ))}
+          </div>
+        </section>
+
+        <section id="workflow" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 18, marginTop: 24 }}>
+          {sections.map((section) => (
+            <article key={section.id} style={{ background: '#fff', borderRadius: 22, padding: 24, border: '1px solid rgba(148,163,184,.18)' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: theme.accent }}>
+                {section.eyebrow}
+              </div>
+              <h2 style={{ margin: '12px 0 10px', fontSize: 24 }}>{section.heading}</h2>
+              <p style={{ color: '#475569', lineHeight: 1.7 }}>{section.body}</p>
+              <ul style={{ margin: '16px 0 0', paddingLeft: 18, color: '#334155', lineHeight: 1.8 }}>
+                {section.items.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </section>
+
+        <section id="contact" style={{ marginTop: 24, background: theme.primary, color: '#fff', borderRadius: 24, padding: '32px 28px' }}>
+          <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '.08em', opacity: .72 }}>Ready to launch</div>
+          <h2 style={{ fontSize: 30, margin: '10px 0 12px' }}>Import ${escapeForTemplate(state.brand.companyName)} into your landing workflow</h2>
+          <p style={{ maxWidth: 680, lineHeight: 1.7, opacity: .88 }}>
+            This export was generated from the Landing Lab blueprint. Each agent keeps its own responsibility, so you can swap copy, layout, or import logic without breaking the rest of the system.
+          </p>
+        </section>
+      </div>
+    </main>
+  );
+}
+`;
 }
 
 function extractKeywords(source: string, companyName: string, offer: string, industry: string) {
@@ -571,10 +746,14 @@ export async function runLandingLab(brief: LandingBrief): Promise<LandingRunResu
     copy: state.copy!,
     integration: state.integration!,
   };
+  const renderedLanding = renderLandingModel(finalState);
+  const exportTsx = buildTsxExport(finalState, renderedLanding);
 
   return {
     state: finalState,
     logs,
     exportJson: JSON.stringify(finalState, null, 2),
+    renderedLanding,
+    exportTsx,
   };
 }

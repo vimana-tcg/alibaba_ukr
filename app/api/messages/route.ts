@@ -2,18 +2,29 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import OpenAI from 'openai';
 
-// Only init Pusher if keys are present
-async function broadcast(channel: string, event: string, data: unknown) {
-  if (!process.env.PUSHER_APP_ID) return;
-  const { pusherServer } = await import('@/lib/pusher');
-  await pusherServer.trigger(channel, event, data);
-}
+// No-op broadcast — using polling instead of Pusher
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function broadcast(_channel: string, _event: string, _data: unknown) { }
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let openai: OpenAI | null = null;
+
+function getOpenAIClient() {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY is required for message translation.');
+  }
+
+  if (!openai) {
+    openai = new OpenAI({ apiKey });
+  }
+
+  return openai;
+}
 
 // Translate content to a target language using GPT-4o-mini
 async function translateMessage(content: string, targetLang: string): Promise<string> {
   try {
+    const openai = getOpenAIClient();
     const res = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [

@@ -63,6 +63,35 @@ type LandingResult = {
     summary: string;
   }>;
   exportJson: string;
+  renderedLanding: {
+    hero: {
+      badge: string;
+      title: string;
+      subtitle: string;
+      primaryCta: string;
+      secondaryCta: string;
+      proofBar: string[];
+    };
+    sections: Array<{
+      id: string;
+      eyebrow: string;
+      heading: string;
+      body: string;
+      items: string[];
+      component: string;
+    }>;
+    theme: {
+      direction: string;
+      bg: string;
+      surface: string;
+      primary: string;
+      accent: string;
+      text: string;
+      headingFont: string;
+      bodyFont: string;
+    };
+  };
+  exportTsx: string;
 };
 
 const INITIAL_FORM = {
@@ -263,6 +292,106 @@ export default function LandingLabPage() {
               </div>
             </section>
 
+            <section
+              className="generated-landing"
+              style={{
+                background: result.renderedLanding.theme.bg,
+                color: result.renderedLanding.theme.text,
+                fontFamily: result.renderedLanding.theme.bodyFont,
+              }}
+            >
+              <div
+                className="generated-landing-hero"
+                style={{
+                  background: `linear-gradient(135deg, ${result.renderedLanding.theme.surface}, #ffffff)`,
+                  borderColor: `${result.renderedLanding.theme.primary}22`,
+                }}
+              >
+                <span
+                  className="landing-lab-kicker"
+                  style={{ background: `${result.renderedLanding.theme.primary}18`, color: result.renderedLanding.theme.primary }}
+                >
+                  {result.renderedLanding.hero.badge}
+                </span>
+                <h2
+                  style={{
+                    fontSize: 'clamp(30px, 5vw, 60px)',
+                    lineHeight: 1.04,
+                    margin: '18px 0 16px',
+                    fontFamily: result.renderedLanding.theme.headingFont,
+                  }}
+                >
+                  {result.renderedLanding.hero.title}
+                </h2>
+                <p style={{ fontSize: 17, lineHeight: 1.8, maxWidth: 760, opacity: 0.9 }}>
+                  {result.renderedLanding.hero.subtitle}
+                </p>
+                <div className="landing-lab-stack" style={{ marginTop: 22 }}>
+                  <button className="btn btn-primary btn-lg">{result.renderedLanding.hero.primaryCta}</button>
+                  <button className="btn btn-outline btn-lg">{result.renderedLanding.hero.secondaryCta}</button>
+                </div>
+                <div className="landing-lab-stack" style={{ marginTop: 20 }}>
+                  {result.renderedLanding.hero.proofBar.map((item) => (
+                    <span
+                      key={item}
+                      className="landing-lab-chip"
+                      style={{
+                        background: '#fff',
+                        color: '#0f172a',
+                        borderColor: `${result.renderedLanding.theme.primary}22`,
+                      }}
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="generated-landing-grid">
+                {result.renderedLanding.sections.map((section) => (
+                  <article
+                    key={section.id}
+                    className="generated-landing-card"
+                    style={{
+                      background: '#fff',
+                      borderColor: `${result.renderedLanding.theme.primary}18`,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        letterSpacing: '0.08em',
+                        textTransform: 'uppercase',
+                        color: result.renderedLanding.theme.accent,
+                        marginBottom: 10,
+                      }}
+                    >
+                      {section.eyebrow}
+                    </div>
+                    <h3
+                      style={{
+                        fontSize: 24,
+                        marginBottom: 10,
+                        fontFamily: result.renderedLanding.theme.headingFont,
+                      }}
+                    >
+                      {section.heading}
+                    </h3>
+                    <p style={{ color: '#475569', lineHeight: 1.75, marginBottom: 14 }}>{section.body}</p>
+                    <div className="landing-lab-rule-list">
+                      {section.items.map((item) => (
+                        <div key={item} className="landing-lab-rule">
+                          <span>•</span>
+                          <span>{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
             <section className="landing-lab-grid" style={{ alignItems: 'start' }}>
               <div className="card">
                 <div className="widget-header">
@@ -330,6 +459,15 @@ export default function LandingLabPage() {
                 ))}
               </div>
 
+              <div className="card">
+                <div className="widget-header">
+                  <h3>Export TSX</h3>
+                </div>
+                <pre className="landing-export">{result.exportTsx}</pre>
+              </div>
+            </section>
+
+            <section className="landing-lab-grid" style={{ alignItems: 'start' }}>
               <div className="card">
                 <div className="widget-header">
                   <h3>Export JSON</h3>
