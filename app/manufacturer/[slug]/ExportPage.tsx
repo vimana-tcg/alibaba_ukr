@@ -208,46 +208,47 @@ export default function ExportPage({ vendor, initialLang = 'en', initialTranslat
                   📦 Products for Export
                 </h2>
                 <div style={{ display: 'grid', gap: 14 }}>
-                  {vendor.products.map(p => (
+                  {vendor.products.map((p: Product) => (
                     <div key={p.id} style={{
-                      border: '1.5px solid #e5e7eb', borderRadius: 12, padding: '20px 24px',
-                      background: '#fff', display: 'flex', gap: 20, alignItems: 'center',
+                      border: '1.5px solid #e5e7eb', borderRadius: 12,
+                      background: '#fff', overflow: 'hidden',
                       boxShadow: '0 1px 3px rgba(0,0,0,.05)',
+                      display: 'flex',
                     }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{p.nameEn}</div>
-                        {p.description && (
-                          <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>{p.description}</div>
-                        )}
-                        <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                          {p.hsCode && (
-                            <span style={{ background: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
-                              HS {p.hsCode}
-                            </span>
+                      {p.imageUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.imageUrl} alt={p.nameEn}
+                          style={{ width: 110, objectFit: 'cover', flexShrink: 0 }} />
+                      )}
+                      <div style={{ flex: 1, padding: '16px 20px', display: 'flex', gap: 12, alignItems: 'center' }}>
+                        <div style={{ flex: 1 }}>
+                          <Link href={`/manufacturer/${vendor.slug}/product/${(p as any).slug ?? p.id}`}
+                            style={{ fontWeight: 700, fontSize: 15, color: '#111827', textDecoration: 'none', display: 'block', marginBottom: 4 }}>
+                            {p.nameEn}
+                          </Link>
+                          {p.description && (
+                            <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5, marginBottom: 6 }}>{p.description}</div>
                           )}
-                          <span style={{ background: '#f3f4f6', color: '#374151', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>
-                            Unit: {p.unit}
-                          </span>
-                          {p.minOrderQty && (
-                            <span style={{ background: '#fffbeb', color: '#92400e', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>
-                              MOQ: {p.minOrderQty} {p.unit}
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            {p.hsCode && <span style={{ background: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700 }}>HS {p.hsCode}</span>}
+                            <span style={{ background: '#f3f4f6', color: '#374151', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>Unit: {p.unit}</span>
+                            {p.minOrderQty && <span style={{ background: '#fffbeb', color: '#92400e', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>MOQ: {p.minOrderQty} {p.unit}</span>}
+                            <span style={{ background: '#f0fdf4', color: '#15803d', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>
+                              {p.priceUsd ? `$${p.priceUsd}/${p.unit}` : 'Price: RFQ'}
                             </span>
-                          )}
-                          <span style={{ background: '#f0fdf4', color: '#15803d', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>
-                            Price: {p.priceUsd ? `$${p.priceUsd}/${p.unit}` : 'RFQ'}
-                          </span>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+                          <Link href={`/rfq/new?vendorId=${vendor.id}&productId=${p.id}`}
+                            style={{ background: '#2563eb', color: '#fff', padding: '9px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: 'none', textAlign: 'center' }}>
+                            Get Quote →
+                          </Link>
+                          <Link href={`/manufacturer/${vendor.slug}/product/${(p as any).slug ?? p.id}`}
+                            style={{ background: '#f3f4f6', color: '#374151', padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none', textAlign: 'center' }}>
+                            Details
+                          </Link>
                         </div>
                       </div>
-                      <Link
-                        href={`/rfq/new?vendorId=${vendor.id}&productId=${p.id}`}
-                        style={{
-                          background: '#2563eb', color: '#fff', padding: '10px 18px',
-                          borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: 'none',
-                          flexShrink: 0, whiteSpace: 'nowrap',
-                        }}
-                      >
-                        Get Quote →
-                      </Link>
                     </div>
                   ))}
                 </div>

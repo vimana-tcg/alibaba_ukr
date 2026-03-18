@@ -21,26 +21,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.85,
   }));
 
-  // Vendor pages + language variants
+  // Vendor pages + language variants + product pages
   let vendors: MetadataRoute.Sitemap = [];
   try {
-    const vs = await prisma.vendor.findMany({ select: { slug: true, updatedAt: true, translations: true } });
+    const vs = await prisma.vendor.findMany({
+      select: { slug: true, updatedAt: true, translations: true, products: { select: { id: true, slug: true, updatedAt: true } } },
+    });
     for (const v of vs) {
-      vendors.push({
-        url: `${base}/manufacturer/${v.slug}`,
-        lastModified: v.updatedAt,
-        changeFrequency: 'weekly' as const,
-        priority: 0.8,
-      });
-      // Add one URL per translated language
+      // Vendor main page
+      vendors.push({ url: `${base}/manufacturer/${v.slug}`, lastModified: v.updatedAt, changeFrequency: 'weekly' as const, priority: 0.8 });
+      // Language variants
       const langs = Object.keys((v.translations as Record<string, unknown>) ?? {});
       for (const lang of langs) {
-        vendors.push({
-          url: `${base}/manufacturer/${v.slug}/${lang}`,
-          lastModified: v.updatedAt,
-          changeFrequency: 'weekly' as const,
-          priority: 0.75,
-        });
+        vendors.push({ url: `${base}/manufacturer/${v.slug}/${lang}`, lastModified: v.updatedAt, changeFrequency: 'weekly' as const, priority: 0.75 });
+      }
+      // Product pages
+      for (const p of v.products) {
+        const productId = p.slug ?? p.id;
+        vendors.push({ url: `${base}/manufacturer/${v.slug}/product/${productId}`, lastModified: p.updatedAt ?? v.updatedAt, changeFrequency: 'monthly' as const, priority: 0.7 });
       }
     }
   } catch {}

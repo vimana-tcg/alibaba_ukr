@@ -4,7 +4,6 @@ import { prisma } from '@/lib/db';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// 50 target languages for translation
 const LANGUAGES = [
   { code: 'de', name: 'German' },        { code: 'fr', name: 'French' },
   { code: 'es', name: 'Spanish' },       { code: 'it', name: 'Italian' },
@@ -33,7 +32,6 @@ const LANGUAGES = [
   { code: 'sq', name: 'Albanian' },
 ];
 
-// Map GPT-extracted category → B2B category slug
 const CATEGORY_SLUG_MAP: Record<string, string> = {
   food: 'agricultural-products',
   metals: 'metals-steel',
@@ -57,7 +55,75 @@ function slugify(text: string): string {
     .slice(0, 60);
 }
 
-async function scrapeWithFirecrawl(url: string): Promise<string | null> {
+// ── Image extraction: zero-dependency, works in serverless ──────────────────
+
+async function extractImages(siteUrl: string, markdownContent: string): Promise<{
+  logoUrl: string | null;
+  productImages: string[];
+}> {
+  let logoUrl: string | null = null;
+  const productImages: string[] = [];
+
+  // 1. Fetch HTML and extract og:image / twitter:image / favicon
+  try {
+    const res = await fetch(siteUrl, {
+      signal: AbortSignal.timeout(8000),
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CoreviaBot/1.0; +https://corevia-flow.vercel.app)' },
+    });
+    const html = await res.text();
+
+    // og:image (handles both attribute orders)
+    const og1 = html.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
+    const og2 = html.match(/content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+    logoUrl = og1?.[1] ?? og2?.[1] ?? null;
+
+    // twitter:image fallback
+    if (!logoUrl) {
+      const tw1 = html.match(/name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i);
+      const tw2 = html.match(/content=["']([^"']+)["'][^>]*name=["']twitter:image["']/i);
+      logoUrl = tw1?.[1] ?? tw2?.[1] ?? null;
+    }
+
+    // apple-touch-icon / logo img fallback
+    if (!logoUrl) {
+      const apple = html.match(/<link[^>]+rel=["']apple-touch-icon["'][^>]*href=["']([^"']+)["']/i);
+      if (apple?.[1]) {
+        const href = apple[1];
+        logoUrl = href.startsWith('http') ? href : new URL(href, siteUrl).href;
+      }
+    }
+
+    // Resolve relative URLs
+    if (logoUrl && !logoUrl.startsWith('http')) {
+      try { logoUrl = new URL(logoUrl, siteUrl).href; } catch { logoUrl = null; }
+    }
+
+    // Extract product images from HTML — look for large <img> tags
+    const imgTags = html.matchAll(/<img[^>]+src=["']([^"']+\.(jpg|jpeg|png|webp))["'][^>]*(?:width=["'](\d+)["'])?/gi);
+    for (const m of imgTags) {
+      if (productImages.length >= 12) break;
+      const w = parseInt(m[3] ?? '999');
+      if (w < 100) continue; // skip tiny icons
+      try {
+        const imgUrl = m[1].startsWith('http') ? m[1] : new URL(m[1], siteUrl).href;
+        if (!productImages.includes(imgUrl)) productImages.push(imgUrl);
+      } catch {}
+    }
+  } catch {}
+
+  // 2. Extract images from Jina/Firecrawl markdown — format: ![alt](url)
+  const mdImgRegex = /!\[[^\]]*\]\((https?:\/\/[^)\s]+\.(?:jpg|jpeg|png|webp|gif)(?:\?[^)]*)?)\)/gi;
+  for (const m of markdownContent.matchAll(mdImgRegex)) {
+    if (productImages.length >= 12) break;
+    if (!productImages.includes(m[1])) productImages.push(m[1]);
+  }
+
+  return { logoUrl, productImages };
+}
+
+// ── Scrapers ─────────────────────────────────────────────────────────────────
+
+async function scrapeWithFirecrawl(url: string): Promise<{ markdown: string; screenshot?: string } | null> {
   const key = process.env.FIRECRAWL_API_KEY;
   if (!key) return null;
   try {
@@ -69,13 +135,13 @@ async function scrapeWithFirecrawl(url: string): Promise<string | null> {
     });
     if (!res.ok) return null;
     const data = await res.json();
-    return data.data?.markdown ?? null;
+    return { markdown: data.data?.markdown ?? '' };
   } catch { return null; }
 }
 
 async function scrapeWithJina(url: string): Promise<string> {
   const res = await fetch(`https://r.jina.ai/${url}`, {
-    headers: { 'Accept': 'text/plain', 'X-Return-Format': 'markdown' },
+    headers: { 'Accept': 'text/plain', 'X-Return-Format': 'markdown', 'X-With-Images-Summary': 'true' },
     signal: AbortSignal.timeout(20000),
   });
   if (!res.ok) throw new Error(`Jina scrape failed: ${res.status}`);
@@ -84,36 +150,48 @@ async function scrapeWithJina(url: string): Promise<string> {
 
 async function scrape(url: string): Promise<string> {
   const fc = await scrapeWithFirecrawl(url);
-  if (fc && fc.length > 200) return fc;
+  if (fc?.markdown && fc.markdown.length > 200) return fc.markdown;
   return scrapeWithJina(url);
 }
+
+// ── GPT extraction ────────────────────────────────────────────────────────────
 
 async function extractWithGPT(rawContent: string, url: string) {
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
-    max_tokens: 2000,
+    max_tokens: 3000,
     response_format: { type: 'json_object' },
     messages: [{
       role: 'user',
-      content: `Extract structured company information from this scraped website content.
-Return ONLY valid JSON with this exact structure:
+      content: `You are a B2B export platform data extractor. Extract structured company and product data from this manufacturer website content.
+
+Return ONLY valid JSON:
 {
-  "companyNameEn": "string",
-  "description": "2-3 sentence professional B2B description in English",
+  "companyNameEn": "Official company name in English",
+  "description": "3-sentence professional B2B company description highlighting export capabilities, production volumes, key products, and quality standards",
   "category": "one of: food|metals|chemicals|textiles|machinery|wood|electronics|construction|energy|healthcare|automotive|packaging",
   "products": [
-    { "nameEn": "string", "description": "string", "unit": "MT|KG|PCS|L", "hsCode": "if obvious" }
+    {
+      "nameEn": "Product name",
+      "description": "2-3 sentence product description with technical specs, applications, and export advantages",
+      "richDescription": "3 paragraphs: (1) what the product is and technical specs, (2) industrial applications and target markets, (3) why source from Ukraine — quality, pricing, DCFTA 0% duty advantage",
+      "unit": "MT|KG|PCS|L|M2|M3",
+      "hsCode": "6-digit HS code if determinable",
+      "minOrderQty": number or null,
+      "imageKeyword": "keyword to find product image on the site"
+    }
   ],
-  "email": "if found",
-  "phone": "if found",
-  "city": "if found",
+  "email": "contact email if found",
+  "phone": "phone number if found",
+  "city": "city name if found",
   "yearEstablished": number or null,
-  "employeeCount": "e.g. 51-200 or null"
+  "employeeCount": "range like 51-200 or null",
+  "certifications": ["ISO9001", "ISO14001", "HACCP", "CE", etc — only if explicitly mentioned]
 }
 
 Website URL: ${url}
 Content:
-${rawContent.slice(0, 8000)}`,
+${rawContent.slice(0, 10000)}`,
     }],
   });
 
@@ -123,11 +201,15 @@ ${rawContent.slice(0, 8000)}`,
   return JSON.parse(jsonMatch[0]);
 }
 
-async function translateWithGPT(data: { name: string; description: string }, langs: string[]): Promise<Record<string, { name: string; description: string }>> {
-  const langList = langs.map(l => {
-    const lang = LANGUAGES.find(x => x.code === l);
-    return lang ? `"${l}": translate to ${lang.name}` : null;
-  }).filter(Boolean).join('\n');
+// ── Translation ───────────────────────────────────────────────────────────────
+
+async function translateWithGPT(
+  data: { name: string; description: string },
+  langs: string[]
+): Promise<Record<string, { name: string; description: string }>> {
+  const langList = langs
+    .map(l => { const lang = LANGUAGES.find(x => x.code === l); return lang ? `"${l}": ${lang.name}` : null; })
+    .filter(Boolean).join(', ');
 
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
@@ -135,14 +217,10 @@ async function translateWithGPT(data: { name: string; description: string }, lan
     response_format: { type: 'json_object' },
     messages: [{
       role: 'user',
-      content: `Translate this company profile to the following languages.
-Return ONLY valid JSON: { "langCode": { "name": "...", "description": "..." }, ... }
-
-Company name: ${data.name}
+      content: `Translate this B2B company profile. Return JSON: { "langCode": { "name": "...", "description": "..." } }
+Company: ${data.name}
 Description: ${data.description}
-
-Languages to translate to:
-${langList}`,
+Translate to: ${langList}`,
     }],
   });
 
@@ -151,6 +229,8 @@ ${langList}`,
   return jsonMatch ? JSON.parse(jsonMatch[0]) : {};
 }
 
+// ── Main handler ──────────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
   try {
     const { url, targetLangs } = await req.json();
@@ -158,7 +238,7 @@ export async function POST(req: NextRequest) {
 
     const langs = targetLangs ?? LANGUAGES.map(l => l.code);
 
-    // Step 1: Scrape (Firecrawl → Jina fallback)
+    // Step 1: Scrape
     let rawContent: string;
     try {
       rawContent = await scrape(url);
@@ -166,33 +246,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch website. Check the URL and try again.' }, { status: 422 });
     }
 
-    // Step 2: Extract structured data with GPT-4o mini
-    let extracted: Awaited<ReturnType<typeof extractWithGPT>>;
-    try {
-      extracted = await extractWithGPT(rawContent, url);
-    } catch {
+    // Step 2: Extract images from HTML + markdown (parallel with GPT)
+    const [extracted, { logoUrl, productImages }] = await Promise.all([
+      extractWithGPT(rawContent, url).catch(() => null),
+      extractImages(url, rawContent),
+    ]);
+
+    if (!extracted) {
       return NextResponse.json({ error: 'Failed to parse website content. Try a different URL.' }, { status: 422 });
     }
 
-    // Step 3: Translate to all languages with GPT-4o mini
+    // Step 3: Translate (2 batches of 25)
     let translations: Record<string, { name: string; description: string }> = {};
     try {
-      translations = await translateWithGPT(
-        { name: extracted.companyNameEn, description: extracted.description },
-        langs.slice(0, 30),
-      );
-      if (langs.length > 30) {
-        const batch2 = await translateWithGPT(
-          { name: extracted.companyNameEn, description: extracted.description },
-          langs.slice(30),
-        );
-        translations = { ...translations, ...batch2 };
-      }
-    } catch {
-      // translations are optional, continue without them
-    }
+      const [b1, b2] = await Promise.all([
+        translateWithGPT({ name: extracted.companyNameEn, description: extracted.description }, langs.slice(0, 25)),
+        langs.length > 25
+          ? translateWithGPT({ name: extracted.companyNameEn, description: extracted.description }, langs.slice(25))
+          : Promise.resolve({}),
+      ]);
+      translations = { ...b1, ...b2 };
+    } catch {}
 
-    // Step 4: Create vendor in DB
+    // Step 4: Create vendor
     const slug = slugify(extracted.companyNameEn) + '-' + Date.now().toString(36);
 
     const user = await prisma.user.create({
@@ -211,27 +287,42 @@ export async function POST(req: NextRequest) {
         slug,
         description: extracted.description,
         category: extracted.category,
+        categorySlug: CATEGORY_SLUG_MAP[extracted.category] ?? null,
         email: extracted.email ?? null,
         phone: extracted.phone ?? null,
         city: extracted.city ?? null,
         yearEstablished: extracted.yearEstablished ?? null,
         employeeCount: extracted.employeeCount ?? null,
+        logoUrl: logoUrl ?? null,
         sourceUrl: url,
         translations,
-        categorySlug: CATEGORY_SLUG_MAP[extracted.category] ?? extracted.category ?? null,
       },
     });
 
-    // Step 5: Create products
+    // Step 5: Create certifications
+    for (const certType of (extracted.certifications ?? []).slice(0, 10)) {
+      await prisma.vendorCertification.create({
+        data: { vendorId: vendor.id, certType },
+      });
+    }
+
+    // Step 6: Create products with images and rich descriptions
     const products = [];
-    for (const p of (extracted.products ?? []).slice(0, 20)) {
+    for (const [i, p] of (extracted.products ?? []).slice(0, 20).entries()) {
+      const productSlug = slugify(p.nameEn) + '-' + vendor.id.slice(-6);
+      const imageUrl = productImages[i] ?? productImages[0] ?? null;
+
       const product = await prisma.product.create({
         data: {
           vendorId: vendor.id,
           nameEn: p.nameEn,
+          slug: productSlug,
           description: p.description ?? null,
+          richDescription: p.richDescription ?? null,
           unit: p.unit ?? 'MT',
           hsCode: p.hsCode ?? null,
+          minOrderQty: p.minOrderQty ?? null,
+          imageUrl,
         },
       });
       products.push(product);
@@ -242,6 +333,8 @@ export async function POST(req: NextRequest) {
       vendor: { id: vendor.id, slug: vendor.slug, companyNameEn: vendor.companyNameEn },
       productsCount: products.length,
       translationsCount: Object.keys(translations).length,
+      logoUrl,
+      productImagesFound: productImages.length,
       profileUrl: `/manufacturer/${vendor.slug}`,
     }, { status: 201 });
 

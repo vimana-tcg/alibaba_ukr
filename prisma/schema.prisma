@@ -120,8 +120,10 @@ model Product {
   vendorId        String
   nameEn          String
   nameUa          String?
+  slug            String?
   hsCode          String?
   description     String?
+  richDescription String?  // GPT-generated 3-paragraph SEO description
   unit            String  @default("MT")
   minOrderQty     Float?
   priceUsd        Float?
