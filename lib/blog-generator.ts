@@ -1,7 +1,20 @@
 import OpenAI from 'openai';
 import { prisma } from '@/lib/db';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let openai: OpenAI | null = null;
+
+function getOpenAIClient() {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY is required for blog generation.');
+  }
+
+  if (!openai) {
+    openai = new OpenAI({ apiKey });
+  }
+
+  return openai;
+}
 
 const LANGUAGES = [
   { code: 'de', name: 'German' }, { code: 'fr', name: 'French' },
@@ -49,6 +62,7 @@ interface VendorData {
 }
 
 async function generateArticle(vendor: VendorData): Promise<{ title: string; body: string; excerpt: string; tags: string }> {
+  const openai = getOpenAIClient();
   const productList = vendor.products.slice(0, 8).map(p => `- ${p.nameEn}${p.hsCode ? ` (HS ${p.hsCode})` : ''}`).join('\n');
 
   const completion = await openai.chat.completions.create({
@@ -109,6 +123,7 @@ async function translateArticle(
   data: { title: string; body: string; excerpt: string },
   langs: string[]
 ): Promise<Record<string, { title: string; body: string; excerpt: string }>> {
+  const openai = getOpenAIClient();
   // Translate title + excerpt only (body translation is expensive; we use excerpt for meta)
   // For full body translation we do a separate call
   const langList = langs.map(l => LANGUAGES.find(x => x.code === l)?.name ?? l).join(', ');

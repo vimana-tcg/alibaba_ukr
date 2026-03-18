@@ -11,17 +11,22 @@ datasource db {
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  passwordHash  String?
-  name          String?
-  role          String    @default("buyer") // buyer | vendor | admin
-  createdAt     DateTime  @default(now())
+  id               String    @id @default(cuid())
+  email            String    @unique
+  passwordHash     String?
+  name             String?
+  role             String    @default("buyer") // buyer | vendor | admin
+  preferredLanguage String   @default("en")   // for auto-translation
+  avatarUrl        String?
+  createdAt        DateTime  @default(now())
 
-  vendor        Vendor?
-  buyer         Buyer?
-  accounts      Account[]
-  sessions      Session[]
+  vendor           Vendor?
+  buyer            Buyer?
+  accounts         Account[]
+  sessions         Session[]
+  sentMessages     Message[]       @relation("MessageSender")
+  notifications    Notification[]
+  participations   ConversationParticipant[]
 }
 
 model Account {
@@ -167,6 +172,7 @@ model Rfq {
   vendor             Vendor      @relation(fields: [vendorId], references: [id])
   items              RfqItem[]
   responses          RfqResponse[]
+  conversation       Conversation?
 }
 
 model RfqItem {
@@ -207,6 +213,81 @@ model BlogPost {
   translations Json?    // { "de": { title, body, excerpt }, ... }
   publishedAt  DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+// ─── CRM: Conversations & Messages ───────────────────────────────────────────
+
+model Conversation {
+  id           String   @id @default(cuid())
+  rfqId        String?  @unique        // linked RFQ (optional)
+  title        String?                 // auto-generated subject
+  status       String   @default("open")  // open | resolved | archived
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  rfq          Rfq?     @relation(fields: [rfqId], references: [id])
+  messages     Message[]
+  participants ConversationParticipant[]
+
+  @@index([updatedAt])
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  userId         String
+  unreadCount    Int          @default(0)
+  lastReadAt     DateTime?
+  joinedAt       DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id               String   @id @default(cuid())
+  conversationId   String
+  senderId         String
+  content          String   @db.Text
+  originalLanguage String   @default("en")
+  isRead           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  conversation     Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender           User                @relation("MessageSender", fields: [senderId], references: [id])
+  translations     MessageTranslation[]
+
+  @@index([conversationId, createdAt])
+}
+
+model MessageTranslation {
+  id        String   @id @default(cuid())
+  messageId String
+  language  String   // "de", "fr", "pl", etc.
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, language])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // "new_message" | "new_rfq" | "rfq_response"
+  title     String
+  body      String?
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
 }
 
 // ─── Compliance / HS Codes ────────────────────────────────────────────────────

@@ -106,6 +106,10 @@ export default async function HomePage() {
               style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff', padding: '16px 32px', borderRadius: 14, fontWeight: 800, fontSize: 16, textDecoration: 'none', boxShadow: '0 8px 32px rgba(37,99,235,0.45)' }}>
               Browse Manufacturers →
             </Link>
+            <Link href="/landing-lab"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'linear-gradient(135deg, #f97316, #ea580c)', color: '#fff', padding: '16px 32px', borderRadius: 14, fontWeight: 800, fontSize: 16, textDecoration: 'none', boxShadow: '0 8px 32px rgba(249,115,22,0.35)' }}>
+              🎨 Launch Landing Lab
+            </Link>
             <Link href="/vendor/import"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.08)', color: '#e2e8f0', padding: '16px 32px', borderRadius: 14, fontWeight: 700, fontSize: 15, textDecoration: 'none', border: '1px solid rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
               🤖 Add Your Company Free
