@@ -100,7 +100,7 @@ async function extractImages(siteUrl: string, markdownContent: string): Promise<
     }
 
     // Schema.org JSON-LD — most reliable for B2B product/company sites
-    const jsonLdBlocks = html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+    const jsonLdBlocks = Array.from(html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi));
     for (const block of jsonLdBlocks) {
       try {
         const data = JSON.parse(block[1]);
@@ -130,7 +130,7 @@ async function extractImages(siteUrl: string, markdownContent: string): Promise<
     }
 
     // Extract product images from HTML — look for large <img> tags
-    const imgTags = html.matchAll(/<img[^>]+src=["']([^"']+\.(jpg|jpeg|png|webp))["'][^>]*(?:width=["'](\d+)["'])?/gi);
+    const imgTags = Array.from(html.matchAll(/<img[^>]+src=["']([^"']+\.(jpg|jpeg|png|webp))["'][^>]*(?:width=["'](\d+)["'])?/gi));
     for (const m of imgTags) {
       if (productImages.length >= 12) break;
       const w = parseInt(m[3] ?? '999');
@@ -144,7 +144,8 @@ async function extractImages(siteUrl: string, markdownContent: string): Promise<
 
   // 2. Extract images from Jina/Firecrawl markdown — format: ![alt](url)
   const mdImgRegex = /!\[[^\]]*\]\((https?:\/\/[^)\s]+\.(?:jpg|jpeg|png|webp|gif)(?:\?[^)]*)?)\)/gi;
-  for (const m of markdownContent.matchAll(mdImgRegex)) {
+  const mdMatches = Array.from(markdownContent.matchAll(mdImgRegex));
+  for (const m of mdMatches) {
     if (productImages.length >= 12) break;
     if (!productImages.includes(m[1])) productImages.push(m[1]);
   }
