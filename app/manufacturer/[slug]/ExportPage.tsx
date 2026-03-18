@@ -16,11 +16,13 @@ interface Product {
   id: string;
   nameEn: string;
   nameUa?: string | null;
+  slug?: string | null;
   description?: string | null;
   unit: string;
   minOrderQty?: number | null;
   priceUsd?: number | null;
   hsCode?: string | null;
+  imageUrl?: string | null;
 }
 
 interface Cert {

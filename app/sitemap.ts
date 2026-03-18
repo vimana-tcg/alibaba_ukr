@@ -39,7 +39,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let vendors: MetadataRoute.Sitemap = [];
   try {
     const vs = await prisma.vendor.findMany({
-      select: { slug: true, updatedAt: true, translations: true, products: { select: { id: true, slug: true, updatedAt: true } } },
+      select: { slug: true, updatedAt: true, translations: true, products: { select: { id: true, slug: true } } },
     });
     for (const v of vs) {
       // Vendor main page
@@ -52,7 +52,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       // Product pages
       for (const p of v.products) {
         const productId = p.slug ?? p.id;
-        vendors.push({ url: `${base}/manufacturer/${v.slug}/product/${productId}`, lastModified: p.updatedAt ?? v.updatedAt, changeFrequency: 'monthly' as const, priority: 0.7 });
+        vendors.push({ url: `${base}/manufacturer/${v.slug}/product/${productId}`, lastModified: v.updatedAt, changeFrequency: 'monthly' as const, priority: 0.7 });
       }
     }
   } catch {}
