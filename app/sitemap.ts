@@ -21,16 +21,28 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.85,
   }));
 
-  // Vendor pages
+  // Vendor pages + language variants
   let vendors: MetadataRoute.Sitemap = [];
   try {
-    const vs = await prisma.vendor.findMany({ select: { slug: true, updatedAt: true } });
-    vendors = vs.map(v => ({
-      url: `${base}/manufacturer/${v.slug}`,
-      lastModified: v.updatedAt,
-      changeFrequency: 'weekly' as const,
-      priority: 0.8,
-    }));
+    const vs = await prisma.vendor.findMany({ select: { slug: true, updatedAt: true, translations: true } });
+    for (const v of vs) {
+      vendors.push({
+        url: `${base}/manufacturer/${v.slug}`,
+        lastModified: v.updatedAt,
+        changeFrequency: 'weekly' as const,
+        priority: 0.8,
+      });
+      // Add one URL per translated language
+      const langs = Object.keys((v.translations as Record<string, unknown>) ?? {});
+      for (const lang of langs) {
+        vendors.push({
+          url: `${base}/manufacturer/${v.slug}/${lang}`,
+          lastModified: v.updatedAt,
+          changeFrequency: 'weekly' as const,
+          priority: 0.75,
+        });
+      }
+    }
   } catch {}
 
   return [...statics, ...categories, ...vendors];

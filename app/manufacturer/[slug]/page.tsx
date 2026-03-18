@@ -16,9 +16,16 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   const vendor = await getVendor(params.slug);
   if (!vendor) return {};
   const desc = vendor.description ?? `Buy directly from ${vendor.companyNameEn}, a verified Ukrainian manufacturer. 0% EU import duty. Ships to 50+ countries.`;
+  const base = process.env.NEXTAUTH_URL ?? 'https://corevia-flow.vercel.app';
+  const translations = (vendor.translations as Record<string, { name: string; description: string }>) ?? {};
+  const alternates: Record<string, string> = { en: `${base}/manufacturer/${params.slug}` };
+  for (const l of Object.keys(translations)) {
+    alternates[l] = `${base}/manufacturer/${params.slug}/${l}`;
+  }
   return {
     title: `${vendor.companyNameEn} — Ukrainian Manufacturer | Corevia Flow`,
     description: desc,
+    alternates: { languages: alternates },
     openGraph: {
       title: `${vendor.companyNameEn} — Direct Export from Ukraine`,
       description: desc,

@@ -39,9 +39,14 @@ async function getVendorsByCategory(categorySlug: string) {
   const cats = categoryMap[categorySlug] ?? [categorySlug.split('-')[0]];
   try {
     return prisma.vendor.findMany({
-      where: { category: { in: cats } },
+      where: {
+        OR: [
+          { categorySlug },
+          { category: { in: cats } },
+        ],
+      },
       include: { certifications: true },
-      take: 12,
+      take: 24,
     });
   } catch { return []; }
 }

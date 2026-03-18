@@ -56,12 +56,18 @@ const CATEGORY_ICONS: Record<string, string> = {
   energy: '⚡', healthcare: '💊', automotive: '🚗', packaging: '📦',
 };
 
-export default function ExportPage({ vendor }: { vendor: Vendor }) {
+interface ExportPageProps {
+  vendor: Vendor;
+  initialLang?: string;
+  initialTranslation?: { name: string; description: string } | null;
+}
+
+export default function ExportPage({ vendor, initialLang = 'en', initialTranslation = null }: ExportPageProps) {
   const translations = (vendor.translations as Record<string, { name: string; description: string }>) ?? {};
   const availableLangs = Object.keys(translations);
 
-  const [lang, setLang] = useState('en');
-  const [t, setT] = useState<{ name: string; description: string } | null>(null);
+  const [lang, setLang] = useState(initialLang);
+  const [t, setT] = useState<{ name: string; description: string } | null>(initialTranslation);
 
   const displayName = t?.name ?? vendor.companyNameEn;
   const displayDesc = t?.description ?? vendor.description ?? '';

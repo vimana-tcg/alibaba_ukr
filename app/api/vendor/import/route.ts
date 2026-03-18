@@ -33,12 +33,44 @@ const LANGUAGES = [
   { code: 'sq', name: 'Albanian' },
 ];
 
+// Map GPT-extracted category → B2B category slug
+const CATEGORY_SLUG_MAP: Record<string, string> = {
+  food: 'agricultural-products',
+  metals: 'metals-steel',
+  chemicals: 'chemicals-fertilizers',
+  textiles: 'textiles-apparel',
+  machinery: 'machinery-equipment',
+  wood: 'wood-paper',
+  electronics: 'electronics',
+  construction: 'construction-materials',
+  energy: 'energy-fuels',
+  healthcare: 'healthcare-pharma',
+  automotive: 'automotive-parts',
+  packaging: 'packaging',
+};
+
 function slugify(text: string): string {
   return text.toLowerCase()
     .replace(/[^a-z0-9\s-]/g, '')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .slice(0, 60);
+}
+
+async function scrapeWithFirecrawl(url: string): Promise<string | null> {
+  const key = process.env.FIRECRAWL_API_KEY;
+  if (!key) return null;
+  try {
+    const res = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, formats: ['markdown'], onlyMainContent: true }),
+      signal: AbortSignal.timeout(25000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.data?.markdown ?? null;
+  } catch { return null; }
 }
 
 async function scrapeWithJina(url: string): Promise<string> {
@@ -48,6 +80,12 @@ async function scrapeWithJina(url: string): Promise<string> {
   });
   if (!res.ok) throw new Error(`Jina scrape failed: ${res.status}`);
   return res.text();
+}
+
+async function scrape(url: string): Promise<string> {
+  const fc = await scrapeWithFirecrawl(url);
+  if (fc && fc.length > 200) return fc;
+  return scrapeWithJina(url);
 }
 
 async function extractWithGPT(rawContent: string, url: string) {
@@ -120,10 +158,10 @@ export async function POST(req: NextRequest) {
 
     const langs = targetLangs ?? LANGUAGES.map(l => l.code);
 
-    // Step 1: Scrape with Jina AI
+    // Step 1: Scrape (Firecrawl → Jina fallback)
     let rawContent: string;
     try {
-      rawContent = await scrapeWithJina(url);
+      rawContent = await scrape(url);
     } catch {
       return NextResponse.json({ error: 'Failed to fetch website. Check the URL and try again.' }, { status: 422 });
     }
@@ -180,6 +218,7 @@ export async function POST(req: NextRequest) {
         employeeCount: extracted.employeeCount ?? null,
         sourceUrl: url,
         translations,
+        categorySlug: CATEGORY_SLUG_MAP[extracted.category] ?? extracted.category ?? null,
       },
     });
 
