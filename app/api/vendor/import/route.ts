@@ -98,6 +98,36 @@ async function extractImages(siteUrl: string, markdownContent: string): Promise<
       try { logoUrl = new URL(logoUrl, siteUrl).href; } catch { logoUrl = null; }
     }
 
+    // Schema.org JSON-LD — most reliable for B2B product/company sites
+    const jsonLdBlocks = html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+    for (const block of jsonLdBlocks) {
+      try {
+        const data = JSON.parse(block[1]);
+        const schema = Array.isArray(data) ? data[0] : data;
+        const imgVal = schema?.image ?? schema?.logo;
+        if (imgVal) {
+          const src = typeof imgVal === 'string' ? imgVal
+            : Array.isArray(imgVal) ? (typeof imgVal[0] === 'string' ? imgVal[0] : imgVal[0]?.url)
+            : imgVal?.url ?? null;
+          if (src && !logoUrl) {
+            logoUrl = src.startsWith('http') ? src : new URL(src, siteUrl).href;
+          }
+        }
+        // Product images from ItemList / Product schemas
+        const offers = schema?.offers ?? schema?.hasOfferCatalog?.itemListElement ?? [];
+        for (const offer of (Array.isArray(offers) ? offers : [offers])) {
+          const img = offer?.image ?? offer?.offers?.image;
+          if (img) {
+            const src = typeof img === 'string' ? img : img?.url;
+            if (src && productImages.length < 12) {
+              const abs = src.startsWith('http') ? src : new URL(src, siteUrl).href;
+              if (!productImages.includes(abs)) productImages.push(abs);
+            }
+          }
+        }
+      } catch {}
+    }
+
     // Extract product images from HTML — look for large <img> tags
     const imgTags = html.matchAll(/<img[^>]+src=["']([^"']+\.(jpg|jpeg|png|webp))["'][^>]*(?:width=["'](\d+)["'])?/gi);
     for (const m of imgTags) {
