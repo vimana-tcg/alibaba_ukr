@@ -99,6 +99,14 @@ async function extractImages(siteUrl: string, markdownContent: string): Promise<
       try { logoUrl = new URL(logoUrl, siteUrl).href; } catch { logoUrl = null; }
     }
 
+    // Priority: find actual logo (URL contains "logo", "brand", "logotype")
+    const allImgUrls = Array.from(html.matchAll(/src=["']([^"']+\.(png|jpg|svg|webp))["']/gi));
+    const logoCandidate = allImgUrls.find(m => /logo|brand|logotype/i.test(m[1]));
+    if (logoCandidate && !logoUrl) {
+      const src = logoCandidate[1];
+      logoUrl = src.startsWith('http') ? src : new URL(src, siteUrl).href;
+    }
+
     // Schema.org JSON-LD — most reliable for B2B product/company sites
     const jsonLdBlocks = Array.from(html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi));
     for (const block of jsonLdBlocks) {
