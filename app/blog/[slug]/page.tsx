@@ -53,7 +53,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
   const base = process.env.NEXTAUTH_URL ?? 'https://corevia-flow.vercel.app';
 
   // Build FAQ JSON-LD from article body
-  const faqMatches = [...post.bodyEn.matchAll(/<h3[^>]*>(.*?)<\/h3>\s*<p[^>]*>(.*?)<\/p>/gs)];
+  const faqMatches = Array.from(post.bodyEn.matchAll(/<h3[^>]*>(.*?)<\/h3>\s*<p[^>]*>(.*?)<\/p>/gs));
   const faqItems = faqMatches.slice(0, 4).map(m => ({
     '@type': 'Question',
     name: m[1].replace(/<[^>]+>/g, ''),
