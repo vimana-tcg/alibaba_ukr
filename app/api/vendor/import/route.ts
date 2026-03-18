@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { prisma } from '@/lib/db';
+import { generateAndSaveBlogPost } from '@/lib/blog-generator';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -358,6 +359,20 @@ export async function POST(req: NextRequest) {
       products.push(product);
     }
 
+    // Step 7: Generate SEO blog article (async, don't block response)
+    const blogSlug = await generateAndSaveBlogPost({
+      id: vendor.id,
+      companyNameEn: vendor.companyNameEn,
+      description: vendor.description,
+      category: vendor.category ?? null,
+      city: vendor.city ?? null,
+      yearEstablished: vendor.yearEstablished ?? null,
+      employeeCount: vendor.employeeCount ?? null,
+      logoUrl: vendor.logoUrl ?? null,
+      slug: vendor.slug,
+      products: products.map(p => ({ nameEn: p.nameEn, description: p.description ?? null, hsCode: p.hsCode ?? null })),
+    });
+
     return NextResponse.json({
       success: true,
       vendor: { id: vendor.id, slug: vendor.slug, companyNameEn: vendor.companyNameEn },
@@ -366,6 +381,7 @@ export async function POST(req: NextRequest) {
       logoUrl,
       productImagesFound: productImages.length,
       profileUrl: `/manufacturer/${vendor.slug}`,
+      blogUrl: blogSlug ? `/blog/${blogSlug}` : null,
     }, { status: 201 });
 
   } catch (err) {

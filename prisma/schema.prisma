@@ -193,6 +193,22 @@ model RfqResponse {
   rfq         Rfq       @relation(fields: [rfqId], references: [id], onDelete: Cascade)
 }
 
+// ─── Blog ─────────────────────────────────────────────────────────────────────
+
+model BlogPost {
+  id           String   @id @default(cuid())
+  vendorId     String?
+  slug         String   @unique
+  titleEn      String
+  bodyEn       String   @db.Text
+  excerpt      String?
+  coverImage   String?
+  tags         String?  // comma-separated
+  translations Json?    // { "de": { title, body, excerpt }, ... }
+  publishedAt  DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 // ─── Compliance / HS Codes ────────────────────────────────────────────────────
 
 model HsCode {

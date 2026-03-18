@@ -20,6 +20,7 @@ export default function Header() {
         <nav style={{ display: 'flex', gap: 4, flex: 1 }}>
           {[
             { href: '/manufacturers', label: 'Manufacturers' },
+            { href: '/blog', label: '📰 Blog' },
             { href: '/calculator', label: '🧮 Duty Calc' },
             { href: '/vendor/import', label: '🤖 AI Import' },
             { href: '/dashboard', label: 'Dashboard' },
